@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Deadlock Detection System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #a0a0ff;
+            font-size: 1.1rem;
+        }
+
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px solid rgba(138, 43, 226, 0.5);
+        }
+
+        .status-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .status-badge.safe {
+            background: rgba(34, 197, 94, 0.2);
+            border: 3px solid #22c55e;
+            color: #22c55e;
+        }
+
+        .status-badge.deadlock {
+            background: rgba(239, 68, 68, 0.2);
+            border: 3px solid #ef4444;
+            color: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .cycle-info {
+            color: #fbbf24;
+            font-size: 1rem;
+            padding: 10px 20px;
+            background: rgba(251, 191, 36, 0.2);
+            border-radius: 8px;
+            border: 2px solid #fbbf24;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+        }
+
+        .canvas-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid rgba(138, 43, 226, 0.3);
+        }
+
+        #graphCanvas {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            cursor: move;
+            display: block;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            border: 2px solid rgba(138, 43, 226, 0.3);
+        }
+
+        .info-panel h3 {
+            color: #a0a0ff;
+            margin-bottom: 12px;
+            font-size: 1.2rem;
+        }
+
+        .entity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .entity-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            font-size: 0.9rem;
+        }
+
+        .entity-item.process {
+            border-left-color: #3b82f6;
+        }
+
+        .entity-item.resource {
+            border-left-color: #22c55e;
+        }
+
+        .entity-id {
+            font-weight: bold;
+            color: #fff;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .entity-details {
+            color: #a0a0ff;
+            font-size: 0.85rem;
+        }
+
+        .legend {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            border: 2px solid rgba(138, 43, 226, 0.3);
+        }
+
+        .legend h3 {
+            color: #a0a0ff;
+            margin-bottom: 12px;
+            font-size: 1.2rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .legend-line {
+            width: 35px;
+            height: 3px;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ AUTOMATED DEADLOCK DETECTION SYSTEM ⚡</h1>
+            <p>Real-time Resource Allocation Graph Analysis</p>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-display">
+                <div id="statusBadge" class="status-badge safe">
+                    <span>✓</span>
+                    <span id="statusText">NO DEADLOCK</span>
+                </div>
+                <div id="cycleInfo" class="cycle-info" style="display: none;">
+                    <strong>Cycle:</strong> <span id="cycleNodes"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="toggleAnimation()">
+                <span id="playText">▶ Start Animation</span>
+            </button>
+            <button class="btn btn-success" onclick="addProcess()">
+                ➕ Add Process
+            </button>
+            <button class="btn btn-success" onclick="addResource()">
+                ➕ Add Resource
+            </button>
+            <button class="btn btn-danger" onclick="createDeadlock()">
+                ⚠️ Create Deadlock
+            </button>
+            <button class="btn btn-warning" onclick="reset()">
+                🔄 Reset
+            </button>
+        </div>
+
+        <div class="main-content">
+            <div class="canvas-container">
+                <canvas id="graphCanvas" width="800" height="500"></canvas>
+            </div>
+
+            <div class="sidebar">
+                <div class="info-panel">
+                    <h3>📦 Processes</h3>
+                    <div id="processList" class="entity-list"></div>
+                </div>
+
+                <div class="info-panel">
+                    <h3>💾 Resources</h3>
+                    <div id="resourceList" class="entity-list"></div>
+                </div>
+
+                <div class="legend">
+                    <h3>Legend</h3>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #22c55e;"></div>
+                        <span>Allocation Edge</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: repeating-linear-gradient(to right, #64748b 0px, #64748b 5px, transparent 5px, transparent 10px);"></div>
+                        <span>Request Edge</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #ef4444;"></div>
+                        <span>Deadlock Cycle</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let processes = [
+            { id: 'P1', x: 150, y: 150, holding: ['R1'], requesting: ['R2'], color: '#3b82f6' },
+            { id: 'P2', x: 450, y: 150, holding: ['R2'], requesting: ['R3'], color: '#8b5cf6' },
+            { id: 'P3', x: 300, y: 350, holding: ['R3'], requesting: ['R1'], color: '#ec4899' }
+        ];
+
+        let resources = [
+            { id: 'R1', x: 250, y: 100, instances: 1, color: '#22c55e' },
+            { id: 'R2', x: 400, y: 250, instances: 1, color: '#f59e0b' },
+            { id: 'R3', x: 200, y: 300, instances: 1, color: '#ef4444' }
+        ];
+
+        let canvas, ctx;
+        let isAnimating = false;
+        let animationFrame = 0;
+        let deadlockDetected = false;
+        let cycleNodes = [];
+        let draggedNode = null;
+        let offsetX = 0, offsetY = 0;
+
+        function init() {
+            canvas = document.getElementById('graphCanvas');
+            ctx = canvas.getContext('2d');
+
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+
+            detectDeadlock();
+            updateUI();
+            draw();
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            for (let p of processes) {
+                const dist = Math.sqrt((p.x - x) * 2 + (p.y - y) * 2);
+                if (dist < 30) {
+                    draggedNode = p;
+                    offsetX = x - p.x;
+                    offsetY = y - p.y;
+                    return;
+                }
+            }
+
+            for (let r of resources) {
+                const dist = Math.sqrt((r.x - x) * 2 + (r.y - y) * 2);
+                if (dist < 30) {
+                    draggedNode = r;
+                    offsetX = x - r.x;
+                    offsetY = y - r.y;
+                    return;
+                }
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (draggedNode) {
+                const rect = canvas.getBoundingClientRect();
+                draggedNode.x = e.clientX - rect.left - offsetX;
+                draggedNode.y = e.clientY - rect.top - offsetY;
+                
+                draggedNode.x = Math.max(40, Math.min(canvas.width - 40, draggedNode.x));
+                draggedNode.y = Math.max(40, Math.min(canvas.height - 40, draggedNode.y));
+                
+                draw();
+            }
+        }
+
+        function handleMouseUp() {
+            draggedNode = null;
+        }
+
+        function detectDeadlock() {
+            const graph = new Map();
+            
+            processes.forEach(p => {
+                graph.set(p.id, []);
+                p.requesting.forEach(r => {
+                    graph.get(p.id).push(r);
+                });
+            });
+            
+            resources.forEach(r => {
+                graph.set(r.id, []);
+                processes.forEach(p => {
+                    if (p.holding.includes(r.id)) {
+                        graph.get(r.id).push(p.id);
+                    }
+                });
+            });
+
+            const visited = new Set();
+            const recStack = new Set();
+            let cycle = [];
+
+            function dfs(node, path) {
+                visited.add(node);
+                recStack.add(node);
+                path.push(node);
+
+                const neighbors = graph.get(node) || [];
+                for (let neighbor of neighbors) {
+                    if (!visited.has(neighbor)) {
+                        if (dfs(neighbor, path.slice())) return true;
+                    } else if (recStack.has(neighbor)) {
+                        const cycleStart = path.indexOf(neighbor);
+                        cycle = path.slice(cycleStart);
+                        return true;
+                    }
+                }
+
+                recStack.delete(node);
+                return false;
+            }
+
+            for (let node of graph.keys()) {
+                if (!visited.has(node)) {
+                    if (dfs(node, [])) {
+                        cycleNodes = cycle;
+                        deadlockDetected = true;
+                        return;
+                    }
+                }
+            }
+
+            cycleNodes = [];
+            deadlockDetected = false;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw edges
+            processes.forEach(process => {
+                process.requesting.forEach(resId => {
+                    const resource = resources.find(r => r.id === resId);
+                    if (resource) {
+                        const isInCycle = cycleNodes.includes(process.id) && cycleNodes.includes(resId);
+                        drawArrow(process.x, process.y, resource.x, resource.y, 
+                            isInCycle ? '#ef4444' : '#64748b', isInCycle, true);
+                    }
+                });
+
+                process.holding.forEach(resId => {
+                    const resource = resources.find(r => r.id === resId);
+                    if (resource) {
+                        const isInCycle = cycleNodes.includes(resId) && cycleNodes.includes(process.id);
+                        drawArrow(resource.x, resource.y, process.x, process.y, 
+                            isInCycle ? '#ef4444' : '#22c55e', isInCycle, false);
+                    }
+                });
+            });
+
+            // Draw processes (squares)
+            processes.forEach(process => {
+                const isInCycle = cycleNodes.includes(process.id);
+                
+                ctx.fillStyle = process.color;
+                ctx.strokeStyle = isInCycle ? '#ef4444' : '#fff';
+                ctx.lineWidth = isInCycle ? 4 : 2;
+                
+                if (isInCycle && isAnimating) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ef4444';
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.fillRect(process.x - 25, process.y - 25, 50, 50);
+                ctx.strokeRect(process.x - 25, process.y - 25, 50, 50);
+                
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(process.id, process.x, process.y);
+            });
+
+            // Draw resources (circles)
+            resources.forEach(resource => {
+                const isInCycle = cycleNodes.includes(resource.id);
+                
+                ctx.fillStyle = resource.color;
+                ctx.strokeStyle = isInCycle ? '#ef4444' : '#fff';
+                ctx.lineWidth = isInCycle ? 4 : 2;
+                
+                if (isInCycle && isAnimating) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ef4444';
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(resource.x, resource.y, 25, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(resource.id, resource.x, resource.y);
+            });
+        }
+
+        function drawArrow(x1, y1, x2, y2, color, highlight, dashed) {
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const offset = 30;
+            const startX = x1 + Math.cos(angle) * offset;
+            const startY = y1 + Math.sin(angle) * offset;
+            const endX = x2 - Math.cos(angle) * offset;
+            const endY = y2 - Math.sin(angle) * offset;
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = highlight ? 3 : 2;
+            
+            if (dashed) {
+                ctx.setLineDash([8, 4]);
+            } else {
+                ctx.setLineDash([]);
+            }
+            
+            if (highlight && isAnimating) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+            } else {
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.stroke();
+
+            // Arrowhead
+            const arrowSize = 10;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(
+                endX - arrowSize * Math.cos(angle - Math.PI / 6),
+                endY - arrowSize * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.lineTo(
+                endX - arrowSize * Math.cos(angle + Math.PI / 6),
+                endY - arrowSize * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+        }
+
+        function updateUI() {
+            const statusBadge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            const cycleInfo = document.getElementById('cycleInfo');
+            const cycleNodesSpan = document.getElementById('cycleNodes');
+
+            if (deadlockDetected) {
+                statusBadge.className = 'status-badge deadlock';
+                statusText.textContent = 'DEADLOCK DETECTED';
+                cycleInfo.style.display = 'block';
+                cycleNodesSpan.textContent = cycleNodes.join(' → ') + ' → ' + cycleNodes[0];
+            } else {
+                statusBadge.className = 'status-badge safe';
+                statusText.textContent = 'NO DEADLOCK';
+                cycleInfo.style.display = 'none';
+            }
+
+            // Update process list
+            const processList = document.getElementById('processList');
+            processList.innerHTML = processes.map(p => `
+                <div class="entity-item process">
+                    <span class="entity-id">${p.id}</span>
+                    <div class="entity-details">
+                        Holding: ${p.holding.join(', ') || 'None'}<br>
+                        Requesting: ${p.requesting.join(', ') || 'None'}
+                    </div>
+                </div>
+            `).join('');
+
+            // Update resource list
+            const resourceList = document.getElementById('resourceList');
+            resourceList.innerHTML = resources.map(r => `
+                <div class="entity-item resource">
+                    <span class="entity-id">${r.id}</span>
+                    <div class="entity-details">
+                        Instances: ${r.instances}
+
